@@ -293,6 +293,39 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 600; letter-spacing: 0.01em
 
 .case-best { color: var(--gold); letter-spacing: 0.04em; }
 
+.resume-slot:not(:empty) { margin-bottom: 18px; }
+
+.resume-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    width: 100%;
+    padding: 14px 18px;
+    text-align: left;
+    border: 1px dashed var(--gold-dim);
+    border-radius: var(--radius);
+    background: var(--gold-soft);
+    transition: border-style 0.2s, transform 0.2s;
+}
+
+.resume-card:hover { border-style: solid; transform: translateY(-1px); }
+
+.resume-card > span:first-child { display: block; }
+
+.resume-kicker {
+    display: block;
+    font-size: 10.5px;
+    letter-spacing: 0.18em;
+    color: var(--gold);
+}
+
+.resume-title { display: block; font-family: var(--serif); font-size: 16px; margin-top: 2px; }
+
+.resume-meta { display: block; font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+
+.resume-go { font-size: 13px; color: var(--gold); white-space: nowrap; }
+
 .home-foot { margin-top: 34px; text-align: center; color: var(--text-faint); font-size: 12px; }
 
 /* ---------------- 简报 ---------------- */
@@ -325,11 +358,63 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 600; letter-spacing: 0.01em
 .brief-meta dd { margin: 0; color: var(--text); }
 
 .brief-summary {
-    margin: 22px 0 0;
+    margin: 0;
     color: #cfc8ba;
     font-size: 14.5px;
     line-height: 1.85;
 }
+
+/* 现场叙事 */
+.scene-block {
+    padding: 20px 22px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--line-soft);
+    border-left: 2px solid var(--gold-dim);
+    background: linear-gradient(180deg, #1b2128 0%, #171c21 100%);
+}
+
+.scene-title {
+    font-size: 10.5px;
+    letter-spacing: 0.2em;
+    color: var(--gold);
+    margin-bottom: 14px;
+}
+
+.scene-block p {
+    margin: 0 0 13px;
+    font-size: 14px;
+    line-height: 1.95;
+    color: #d3cdc0;
+    animation: fadeUp 0.5s ease both;
+}
+
+.scene-block p:nth-child(2) { animation-delay: 0.04s; }
+.scene-block p:nth-child(3) { animation-delay: 0.08s; }
+.scene-block p:nth-child(4) { animation-delay: 0.12s; }
+.scene-block p:nth-child(5) { animation-delay: 0.16s; }
+.scene-block p:nth-child(6) { animation-delay: 0.2s; }
+
+.scene-block p:last-of-type { margin-bottom: 0; }
+
+.scene-note-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px dashed var(--line);
+}
+
+.scene-note {
+    font-size: 12px;
+    color: var(--text-dim);
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    padding: 3px 11px;
+    line-height: 1.5;
+}
+
+.scene-note::before { content: "▪"; color: var(--gold-dim); margin-right: 5px; }
 
 .roster { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; }
 
@@ -375,6 +460,24 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 600; letter-spacing: 0.01em
 }
 
 .game-stat b { color: var(--gold); font-weight: 600; }
+
+.progress-track {
+    height: 3px;
+    border-radius: 3px;
+    background: var(--line-soft);
+    overflow: hidden;
+    margin: 0 0 12px;
+}
+
+.progress-track i {
+    display: block;
+    height: 100%;
+    width: 0;
+    background: linear-gradient(90deg, var(--gold-dim), var(--gold));
+    transition: width 0.4s ease;
+}
+
+.mobile-tabs { display: none; }
 
 .game-grid {
     display: grid;
@@ -543,12 +646,43 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 600; letter-spacing: 0.01em
 .suspect-role { font-size: 12px; color: var(--text-faint); letter-spacing: 0.04em; }
 
 .suspect-intro {
-    margin: 10px 0 18px;
+    margin: 10px 0 12px;
     font-size: 13px;
     color: var(--text-dim);
     font-style: italic;
     line-height: 1.7;
 }
+
+/* 人物档案 */
+.dossier { margin: 0 0 16px; }
+
+.dossier-toggle {
+    font-size: 12px;
+    color: var(--text-faint);
+    border: 1px solid var(--line-soft);
+    border-radius: 20px;
+    padding: 3px 12px;
+    transition: color 0.18s, border-color 0.18s;
+}
+
+.dossier-toggle:hover { color: var(--gold); border-color: var(--gold-dim); }
+
+.dossier-body {
+    display: grid;
+    grid-template-columns: 66px 1fr;
+    gap: 6px 12px;
+    margin-top: 10px;
+    padding: 12px 14px;
+    border: 1px solid var(--line-soft);
+    border-radius: var(--radius-sm);
+    background: #171c21;
+    font-size: 12.5px;
+    line-height: 1.6;
+    animation: fadeUp 0.25s ease both;
+}
+
+.dossier-body .k { color: var(--text-faint); letter-spacing: 0.04em; }
+.dossier-body .v { color: #d3cdc1; }
 
 .statement {
     position: relative;
@@ -655,6 +789,60 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 600; letter-spacing: 0.01em
 }
 
 .notes-empty { font-size: 12.5px; color: var(--text-faint); line-height: 1.8; }
+
+.panel-notes .panel-head { align-items: center; }
+
+.mini-tabs { display: flex; gap: 4px; }
+
+.mini-tabs button {
+    font-size: 12px;
+    padding: 3px 11px;
+    border-radius: 20px;
+    border: 1px solid transparent;
+    color: var(--text-faint);
+    transition: color 0.18s, border-color 0.18s, background 0.18s;
+}
+
+.mini-tabs button:hover { color: var(--text-dim); }
+
+.mini-tabs button.is-active {
+    color: var(--gold);
+    border-color: var(--line);
+    background: rgba(200, 164, 92, 0.08);
+}
+
+/* 时间线 */
+.timeline-item {
+    display: grid;
+    grid-template-columns: 50px 1fr;
+    gap: 10px;
+    padding: 9px 0;
+    border-bottom: 1px dashed var(--line-soft);
+    font-size: 12.5px;
+    line-height: 1.65;
+    color: #d2ccc0;
+}
+
+.timeline-item:last-child { border-bottom: none; }
+
+.timeline-time {
+    font-variant-numeric: tabular-nums;
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    color: var(--gold-dim);
+}
+
+.timeline-item.is-locked { color: var(--text-faint); }
+
+.timeline-item.is-locked .timeline-time { color: #3a444e; }
+
+.timeline-hint {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px dashed var(--line-soft);
+    font-size: 11.5px;
+    color: var(--text-faint);
+}
 
 .game-actions {
     display: flex;
@@ -821,6 +1009,31 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 600; letter-spacing: 0.01em
 /* ---------------- 响应式 ---------------- */
 @media (max-width: 1080px) {
     .game-grid { grid-template-columns: 1fr; }
+
+    .mobile-tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+
+    .mobile-tabs button {
+        flex: 1;
+        padding: 9px 0;
+        font-size: 13px;
+        border: 1px solid var(--line-soft);
+        border-radius: 24px;
+        color: var(--text-dim);
+        background: #171c21;
+    }
+
+    .mobile-tabs button.is-active {
+        color: var(--gold);
+        border-color: var(--gold-dim);
+        background: var(--gold-soft);
+    }
+
+    .game-grid[data-active="evidence"] .panel-interview,
+    .game-grid[data-active="evidence"] .panel-notes,
+    .game-grid[data-active="interview"] .panel-evidence,
+    .game-grid[data-active="interview"] .panel-notes,
+    .game-grid[data-active="notes"] .panel-evidence,
+    .game-grid[data-active="notes"] .panel-interview { display: none; }
     .panel-evidence,
     .panel-interview,
     .panel-notes { max-height: none; min-height: 0; }
@@ -832,6 +1045,8 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 600; letter-spacing: 0.01em
 @media (max-width: 640px) {
     body { font-size: 14px; }
     .screen { padding: 20px 14px 56px; }
+    .scene-block { padding: 16px; }
+    .scene-block p { font-size: 13.5px; line-height: 1.9; }
     .home-head h1 { font-size: 24px; }
     .brief-panel, .accuse-panel, .result-panel { padding: 22px 18px 26px; }
     .brief-panel h1 { font-size: 26px; }

@@ -26,6 +26,7 @@
             <h1>选择你要接手的案件</h1>
             <p>一次一桩。读完卷宗、问过口供、指认真凶——别让雨停得太早。</p>
         </div>
+        <div id="resume-slot" class="resume-slot"></div>
         <div id="case-list" class="case-list"></div>
         <div class="home-foot">
             <p>进度与最佳记录只保存在这台设备上。更多案件会陆续收入档案柜。</p>
@@ -40,7 +41,13 @@
             <h1 id="brief-title"></h1>
             <p class="brief-sub" id="brief-sub"></p>
             <dl class="brief-meta" id="brief-meta"></dl>
+
+            <h3 class="section-title">你看到的现场</h3>
+            <div id="scene-block" class="scene-block"></div>
+
+            <h3 class="section-title">案情摘要</h3>
             <p class="brief-summary" id="brief-summary"></p>
+
             <h3 class="section-title">涉案人员</h3>
             <div class="roster" id="brief-roster"></div>
             <div class="brief-actions">
@@ -57,7 +64,15 @@
             <div class="game-stat" id="game-stat"></div>
         </div>
 
-        <div class="game-grid">
+        <div class="progress-track"><i id="progress-fill"></i></div>
+
+        <div class="mobile-tabs" id="mobile-tabs">
+            <button class="is-active" data-panel="evidence" onclick="app.setPanel('evidence')">证物</button>
+            <button data-panel="interview" onclick="app.setPanel('interview')">审讯</button>
+            <button data-panel="notes" onclick="app.setPanel('notes')">笔记</button>
+        </div>
+
+        <div class="game-grid" id="game-grid" data-active="evidence">
             <!-- 左：现场证物 -->
             <aside class="panel panel-evidence">
                 <div class="panel-head">
@@ -77,7 +92,10 @@
             <!-- 右：推理笔记 -->
             <aside class="panel panel-notes">
                 <div class="panel-head">
-                    <h3>推理笔记</h3>
+                    <div class="mini-tabs">
+                        <button id="ntab-deductions" class="is-active" onclick="app.setNotesTab('deductions')">推论</button>
+                        <button id="ntab-timeline" onclick="app.setNotesTab('timeline')">时间线</button>
+                    </div>
                     <span class="panel-hint" id="notes-count"></span>
                 </div>
                 <div id="notes-body" class="notes-body"></div>
@@ -127,6 +145,7 @@
             <div class="truth-block" id="truth-block"></div>
             <div class="result-actions">
                 <button class="btn-ghost" onclick="app.backHome()">返回档案柜</button>
+                <button class="btn-ghost" onclick="app.shareResult()">复制成绩</button>
                 <button class="btn-primary" onclick="app.replayCase()">再查一次</button>
             </div>
         </div>

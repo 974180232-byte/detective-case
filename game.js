@@ -6,6 +6,7 @@
 
 const RECORDS_KEY = 'detective_records_v1';
 const MUTE_KEY = 'detective_muted_v1';
+const PROGRESS_KEY = 'detective_progress_v1';
 
 /* ---------------- 本机排行榜 ----------------
    目前只写 localStorage。将来接数据库时，只需要把
@@ -106,6 +107,10 @@ const app = {
     timerId: null,
     toastTimer: null,
     muted: false,
+    notesTab: 'deductions',
+    dossierOpen: false,
+    panel: 'evidence',
+    lastResult: null,
     accusation: { pid: null, evidence: [], motive: null },
 
     /* ---------- 启动 ---------- */
@@ -154,15 +159,18 @@ const app = {
     renderHome() {
         const list = document.getElementById('case-list');
         if (!list) return;
-        list.innerHTML = this.allCases().map(function (c) {
+        const self = this;
+        list.innerHTML = this.allCases().map(function (c, i) {
             const best = Leaderboard.bestOf(c.id);
             const bestText = best
                 ? '最佳 ' + best.rank + ' · ' + fmtTime(best.elapsed)
                 : '未结案';
+            const no = 'No.' + (i + 1 < 10 ? '0' : '') + (i + 1);
             return '<button class="case-card" onclick="playSfx(\'click\');app.openCase(\'' + c.id + '\')">'
                 + '<div class="case-top">'
                 + '<span class="case-cover">' + c.cover + '</span>'
                 + '<div class="case-tags">'
+                + '<span class="case-tag">' + no + '</span>'
                 + '<span class="case-tag is-diff">' + c.difficulty + '</span>'
                 + '<span class="case-tag">' + c.duration + '</span>'
                 + '</div></div>'
@@ -173,9 +181,11 @@ const app = {
                 + '<span class="case-best">' + bestText + '</span></div>'
                 + '</button>';
         }).join('');
+        this.renderResumeSlot();
     },
 
     backHome() {
+        this.saveProgress();
         this.stopTimer();
         this.caseData = null;
         this.state = null;
@@ -184,6 +194,89 @@ const app = {
         this.lastResponse = null;
         this.renderHome();
         this.showScreen('screen-home');
+    },
+
+    /* ---------- 进度存档 ---------- */
+    loadProgress() {
+        try { return JSON.parse(localStorage.getItem(PROGRESS_KEY) || 'null'); }
+        catch (e) { return null; }
+    },
+
+    saveProgress() {
+        if (!this.state || this.state.solved) return;
+        try {
+            this.state.elapsed = Math.floor((Date.now() - this.state.startedAt) / 1000);
+            localStorage.setItem(PROGRESS_KEY, JSON.stringify({
+                caseId: this.state.caseId,
+                elapsed: this.state.elapsed,
+                found: this.state.found,
+                seen: this.state.seen,
+                misses: this.state.misses,
+                breakthroughs: this.state.breakthroughs,
+                hints: this.state.hints,
+                currentPid: this.currentPid,
+                selectedEvidence: this.selectedEvidence,
+                savedAt: Date.now()
+            }));
+        }
+        catch (e) { /* 隐私模式下写入失败，忽略 */ }
+    },
+
+    clearProgress() {
+        try { localStorage.removeItem(PROGRESS_KEY); } catch (e) { }
+    },
+
+    renderResumeSlot() {
+        const slot = document.getElementById('resume-slot');
+        if (!slot) return;
+        const p = this.loadProgress();
+        if (!p || !p.caseId) { slot.innerHTML = ''; return; }
+        const c = this.allCases().filter(function (x) { return x.id === p.caseId; })[0];
+        if (!c) { slot.innerHTML = ''; return; }
+        const seen = Object.keys(p.seen || {}).length;
+        slot.innerHTML = '<button class="resume-card" onclick="playSfx(\'click\');app.resumeCase()">'
+            + '<span>'
+            + '<span class="resume-kicker">未结案的卷宗</span>'
+            + '<span class="resume-title">' + c.title + '</span>'
+            + '<span class="resume-meta">' + fmtTime(p.elapsed || 0) + ' · 已勘察 '
+            + seen + '/' + c.evidence.length + ' 件证物</span>'
+            + '</span>'
+            + '<span class="resume-go">继续调查 →</span>'
+            + '</button>';
+    },
+
+    resumeCase() {
+        const p = this.loadProgress();
+        if (!p) { this.renderResumeSlot(); return; }
+        const c = this.allCases().filter(function (x) { return x.id === p.caseId; })[0];
+        if (!c) { this.clearProgress(); this.renderResumeSlot(); return; }
+
+        this.caseData = c;
+        this.state = {
+            caseId: c.id,
+            startedAt: Date.now() - (p.elapsed || 0) * 1000,
+            elapsed: p.elapsed || 0,
+            found: p.found || {},
+            seen: p.seen || {},
+            fresh: {},
+            misses: p.misses || 0,
+            breakthroughs: p.breakthroughs || 0,
+            hints: p.hints || 0
+        };
+        this.currentPid = p.currentPid || c.suspects[0].pid;
+        this.selectedEvidence = p.selectedEvidence || null;
+        this.lastResponse = null;
+        this.notesTab = 'deductions';
+        this.dossierOpen = false;
+        this.accusation = { pid: null, evidence: [], motive: null };
+
+        document.getElementById('game-case-name').textContent = c.title + ' · ' + c.subtitle;
+        this.setPanel('evidence');
+        this.renderGame();
+        this.showScreen('screen-game');
+        this.startTimer();
+        playSfx('click');
+        this.showToast('已恢复到上次的调查', 'gold');
     },
 
     /* ---------- 简报 ---------- */
@@ -209,6 +302,20 @@ const app = {
         document.getElementById('brief-meta').innerHTML = meta.map(function (row) {
             return '<dt>' + row[0] + '</dt><dd>' + row[1] + '</dd>';
         }).join('');
+
+        const sceneBox = document.getElementById('scene-block');
+        if (sceneBox) {
+            if (c.scene) {
+                sceneBox.innerHTML = '<div class="scene-title">' + c.scene.title + '</div>'
+                    + c.scene.paragraphs.map(function (p) { return '<p>' + p + '</p>'; }).join('')
+                    + (c.scene.notes && c.scene.notes.length
+                        ? '<div class="scene-note-list">' + c.scene.notes.map(function (n) {
+                            return '<span class="scene-note">' + n + '</span>';
+                        }).join('') + '</div>'
+                        : '');
+            }
+            else { sceneBox.innerHTML = ''; }
+        }
 
         document.getElementById('brief-summary').textContent = c.brief.summary;
 
@@ -249,18 +356,22 @@ const app = {
         this.currentPid = c.suspects[0].pid;
         this.selectedEvidence = null;
         this.lastResponse = null;
+        this.notesTab = 'deductions';
+        this.dossierOpen = false;
         this.accusation = { pid: null, evidence: [], motive: null };
 
         document.getElementById('game-case-name').textContent = c.title + ' · ' + c.subtitle;
 
+        this.setPanel('evidence');
         this.renderGame();
         this.showScreen('screen-game');
         this.startTimer();
+        this.saveProgress();
         playSfx('click');
     },
 
     confirmQuit() {
-        if (window.confirm('放弃本案？本局的调查进度不会保留。')) {
+        if (window.confirm('放弃本案？进度会自动保留，下次可从档案柜继续。')) {
             this.backHome();
         }
     },
@@ -281,7 +392,7 @@ const app = {
             if (el) el.textContent = fmtTime(self.state.elapsed);
         }, 1000);
         const el = document.getElementById('case-timer');
-        if (el) el.textContent = '00:00';
+        if (el) el.textContent = fmtTime(this.state ? this.state.elapsed : 0);
     },
 
     stopTimer() {
@@ -307,6 +418,32 @@ const app = {
         const clueCount = this.countDeductions();
         el.innerHTML = '<b>' + seenCount + '</b>/' + c.evidence.length + ' 已勘察 · <b>'
             + clueCount + '</b> 条推论 · <b>' + this.state.misses + '</b> 次失误';
+        this.renderProgress();
+    },
+
+    renderProgress() {
+        const bar = document.getElementById('progress-fill');
+        if (!bar || !this.state) return;
+        const total = this.caseData.evidence.length + this.caseData.deductions.length;
+        const got = Object.keys(this.state.seen).length + this.countDeductions();
+        const pct = total ? Math.min(100, Math.round(got / total * 100)) : 0;
+        bar.style.width = pct + '%';
+    },
+
+    setPanel(name) {
+        this.panel = name;
+        const grid = document.getElementById('game-grid');
+        if (grid) {
+            if (grid.dataset) { grid.dataset.active = name; }
+            else if (grid.setAttribute) { grid.setAttribute('data-active', name); }
+        }
+        const tabs = document.getElementById('mobile-tabs');
+        if (tabs && tabs.querySelectorAll) {
+            const buttons = tabs.querySelectorAll('button');
+            for (let i = 0; i < buttons.length; i++) {
+                buttons[i].classList.toggle('is-active', buttons[i].getAttribute('data-panel') === name);
+            }
+        }
     },
 
     countDeductions() {
@@ -343,6 +480,7 @@ const app = {
         this.renderInterview();
         this.renderStats();
         this.renderNotes();
+        this.saveProgress();
         if (added > 0) {
             playSfx('clue');
             this.showToast('推理笔记 +' + added, 'gold');
@@ -423,6 +561,22 @@ const app = {
             + '<div class="suspect-role">' + s.role + '</div></div></div>'
             + '<p class="suspect-intro">' + s.intro + '</p>';
 
+        if (s.profile) {
+            html += '<div class="dossier">'
+                + '<button class="dossier-toggle" onclick="playSfx(\'click\');app.toggleDossier()">'
+                + (this.dossierOpen ? '收起档案 ▴' : '查看档案 ▾') + '</button>';
+            if (this.dossierOpen) {
+                html += '<div class="dossier-body">'
+                    + '<span class="k">年龄</span><span class="v">' + s.profile.age + '</span>'
+                    + '<span class="k">身份</span><span class="v">' + s.profile.job + '</span>'
+                    + '<span class="k">关系</span><span class="v">' + s.profile.relation + '</span>'
+                    + '<span class="k">自称</span><span class="v">' + s.profile.alibi + '</span>'
+                    + '<span class="k">备注</span><span class="v">' + s.profile.note + '</span>'
+                    + '</div>';
+            }
+            html += '</div>';
+        }
+
         html += statements.map(function (st) {
             const fresh = !!self.state.fresh[st.id];
             return '<div class="statement' + (fresh ? ' is-fresh' : '') + '">'
@@ -462,6 +616,12 @@ const app = {
         body.innerHTML = html;
     },
 
+    toggleDossier() {
+        this.dossierOpen = !this.dossierOpen;
+        playSfx('click');
+        this.renderInterview();
+    },
+
     askMore(pid) {
         const s = this.getSuspect(pid);
         if (!s || !this.state) return;
@@ -477,6 +637,7 @@ const app = {
         this.renderInterview();
         this.renderStats();
         this.renderNotes();
+        this.saveProgress();
         this.state.fresh = {};
         if (added > 0) {
             playSfx('clue');
@@ -521,6 +682,7 @@ const app = {
         this.renderInterview();
         this.renderStats();
         this.renderNotes();
+        this.saveProgress();
         if (added > 0) {
             playSfx('clue');
             this.showToast('推理笔记 +' + added, 'gold');
@@ -544,11 +706,25 @@ const app = {
         return added;
     },
 
+    setNotesTab(tab) {
+        this.notesTab = tab;
+        playSfx('click');
+        this.renderNotes();
+    },
+
     renderNotes() {
         const body = document.getElementById('notes-body');
         const count = document.getElementById('notes-count');
         if (!body) return;
         const self = this;
+
+        const dTab = document.getElementById('ntab-deductions');
+        const tTab = document.getElementById('ntab-timeline');
+        if (dTab && dTab.classList) dTab.classList.toggle('is-active', this.notesTab === 'deductions');
+        if (tTab && tTab.classList) tTab.classList.toggle('is-active', this.notesTab === 'timeline');
+
+        if (this.notesTab === 'timeline') { this.renderTimeline(body, count); return; }
+
         const items = this.caseData.deductions.filter(function (d) { return self.state.found[d.id]; });
         if (count) count.textContent = items.length + '/' + this.caseData.deductions.length;
 
@@ -561,6 +737,24 @@ const app = {
                 + '<span class="note-index">' + (i + 1 < 10 ? '0' : '') + (i + 1) + '</span>'
                 + '<span>' + d.text + '</span></div>';
         }).join('');
+    },
+
+    renderTimeline(body, count) {
+        const self = this;
+        const items = this.caseData.timeline || [];
+        let shown = 0;
+        const html = items.map(function (t) {
+            const ok = (t.needs || []).every(function (n) { return self.state.found[n]; });
+            if (ok) shown++;
+            return '<div class="timeline-item' + (ok ? '' : ' is-locked') + '">'
+                + '<span class="timeline-time">' + (ok ? t.time : '--:--') + '</span>'
+                + '<span>' + (ok ? t.text : '尚未确认') + '</span></div>';
+        }).join('');
+
+        body.innerHTML = html
+            + '<div class="timeline-hint">已确认 ' + shown + '/' + items.length
+            + ' 个时间点。勘察证物、逼出口供都会点亮新的节点。</div>';
+        if (count) count.textContent = shown + '/' + items.length;
     },
 
     showHint() {
@@ -639,6 +833,8 @@ const app = {
         if (!acc.motive) { this.showToast('还没选动机', 'red'); return; }
 
         this.stopTimer();
+        this.state.solved = true;
+        this.clearProgress();
         const result = this.evaluate();
         this.renderResult(result);
         this.showScreen('screen-result');
@@ -682,6 +878,7 @@ const app = {
     },
 
     renderResult(r) {
+        this.lastResult = r;
         const t = this.caseData.truth;
         const titles = {
             S: ['真相大白', '每一条证据都咬合在一起，你几乎没有多余的动作。'],
@@ -735,6 +932,42 @@ const app = {
             });
             if (isBest) this.showToast('本机最佳记录已更新', 'gold');
         }
+    },
+
+    shareResult() {
+        const r = this.lastResult;
+        if (!r) return;
+        const text = '我在《侦探档案》的「' + this.caseData.title + '」拿到了 '
+            + r.rank + ' 级，用时 ' + fmtTime(r.elapsed)
+            + '，失误 ' + this.state.misses + ' 次。\n'
+            + 'https://974180232-byte.github.io/detective-case/';
+        const self = this;
+        if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(
+                function () { self.showToast('成绩已复制到剪贴板', 'gold'); },
+                function () { self.fallbackCopy(text); }
+            );
+        }
+        else {
+            this.fallbackCopy(text);
+        }
+    },
+
+    fallbackCopy(text) {
+        if (!document.createElement || !document.body) {
+            this.showToast('当前环境不支持复制', 'red');
+            return;
+        }
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        let ok = false;
+        try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+        document.body.removeChild(ta);
+        this.showToast(ok ? '成绩已复制到剪贴板' : '复制失败，请手动选择文本', ok ? 'gold' : 'red');
     },
 
     /* ---------- 调试/扩展占位 ---------- */
