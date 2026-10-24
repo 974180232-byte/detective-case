@@ -23,9 +23,13 @@
     <!-- ============ 首页：案件列表 ============ -->
     <section id="screen-home" class="screen">
         <div class="home-head">
+            <span class="home-kicker" id="home-kicker">CASE ARCHIVE</span>
             <h1>选择你要接手的案件</h1>
+            <span class="home-rule"></span>
             <p>一次一桩。读完卷宗、问过口供、指认真凶——别让雨停得太早。</p>
         </div>
+        <div id="home-stats" class="home-stats"></div>
+        <div id="daily-slot" class="daily-slot"></div>
         <div id="resume-slot" class="resume-slot"></div>
         <div id="case-list" class="case-list"></div>
         <div class="home-foot">
@@ -37,6 +41,10 @@
     <section id="screen-brief" class="screen hidden">
         <div class="brief-panel panel">
             <button class="link-back" onclick="app.backHome()">← 返回档案柜</button>
+            <div class="folder-head">
+                <span id="brief-no" class="folder-no">CASE FILE No.01</span>
+                <span class="folder-stamp">机密</span>
+            </div>
             <div class="brief-tag" id="brief-tag"></div>
             <h1 id="brief-title"></h1>
             <p class="brief-sub" id="brief-sub"></p>
@@ -51,6 +59,13 @@
 
             <h3 class="section-title">涉案人员</h3>
             <div class="roster" id="brief-roster"></div>
+
+            <h3 class="section-title">关系网</h3>
+            <div class="relation-wrap">
+                <div id="relation-map" class="relation-map"></div>
+                <div id="relation-detail" class="relation-detail">点一个人，看看他和这屋子里其他人的关系。</div>
+            </div>
+
             <div class="brief-actions">
                 <button class="btn-primary" onclick="app.startInvestigation()">开始调查</button>
             </div>
@@ -97,6 +112,7 @@
                     <div class="mini-tabs">
                         <button id="ntab-deductions" class="is-active" onclick="app.setNotesTab('deductions')">推论</button>
                         <button id="ntab-timeline" onclick="app.setNotesTab('timeline')">时间线</button>
+                        <button id="ntab-dossier" onclick="app.setNotesTab('dossier')">卷宗</button>
                     </div>
                     <span class="panel-hint" id="notes-count"></span>
                 </div>
@@ -137,6 +153,11 @@
     <!-- ============ 结案 ============ -->
     <section id="screen-result" class="screen hidden">
         <div class="panel result-panel">
+            <div class="report-head">
+                <span>结案报告 · CASE CLOSED</span>
+                <span id="report-no"></span>
+            </div>
+            <div class="seal" id="result-seal">已结案</div>
             <div class="verdict-row">
                 <div class="verdict-badge" id="verdict-badge">—</div>
                 <div class="verdict-text">

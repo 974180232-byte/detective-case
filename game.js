@@ -7,6 +7,7 @@
 const RECORDS_KEY = 'detective_records_v1';
 const MUTE_KEY = 'detective_muted_v1';
 const PROGRESS_KEY = 'detective_progress_v1';
+const DAILY_KEY = 'detective_daily_v1';
 
 /* ---------------- 本机排行榜 ----------------
    目前只写 localStorage。将来接数据库时，只需要把
@@ -39,6 +40,34 @@ const Leaderboard = {
             this.save(all);
         }
         return better;
+    }
+};
+
+/* ---------------- 每日一案 ----------------
+   按本地日期算出一桩当日案件，同一天所有设备一致，隔天自动换案。
+   当日最好成绩单独存一份，跨天自动作废。 */
+const Daily = {
+    load() {
+        try { return JSON.parse(localStorage.getItem(DAILY_KEY) || 'null'); }
+        catch (e) { return null; }
+    },
+    today() {
+        const rec = this.load();
+        return rec && rec.date === todayKey() ? rec : null;
+    },
+    record(caseId, rank, elapsed) {
+        const old = this.today();
+        if (old && old.caseId === caseId) {
+            const oldScore = Leaderboard.staticRank(old.rank);
+            const newScore = Leaderboard.staticRank(rank);
+            if (oldScore > newScore || (oldScore === newScore && old.elapsed <= elapsed)) return false;
+        }
+        const rec = {
+            date: todayKey(), caseId: caseId, rank: rank,
+            elapsed: elapsed, at: Date.now()
+        };
+        try { localStorage.setItem(DAILY_KEY, JSON.stringify(rec)); } catch (e) { }
+        return true;
     }
 };
 
@@ -90,6 +119,42 @@ function fmtTime(sec) {
     const m = Math.floor(s / 60);
     const r = s % 60;
     return (m < 10 ? '0' : '') + m + ':' + (r < 10 ? '0' : '') + r;
+}
+
+/* 本地日期：YYYY-MM-DD */
+function todayKey() {
+    const t = new Date();
+    const m = t.getMonth() + 1;
+    const d = t.getDate();
+    return t.getFullYear() + '-' + (m < 10 ? '0' : '') + m + '-' + (d < 10 ? '0' : '') + d;
+}
+
+/* 本地日序号：相邻两天必然差 1，用来轮换每日案件 */
+function dayIndex() {
+    const t = new Date();
+    return Math.floor(new Date(t.getFullYear(), t.getMonth(), t.getDate()).getTime() / 86400000);
+}
+
+function dayLabel() {
+    const t = new Date();
+    const week = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][t.getDay()];
+    return (t.getMonth() + 1) + ' 月 ' + t.getDate() + ' 日 · ' + week;
+}
+
+/* 难度文字 → 星级。新案件沿用「入门 / 进阶 / 困难 / 极难」即可自动识别 */
+function diffStars(level) {
+    const s = String(level || '');
+    if (s.indexOf('入门') >= 0 || s.indexOf('简单') >= 0) return 1;
+    if (s.indexOf('进阶') >= 0 || s.indexOf('普通') >= 0 || s.indexOf('中等') >= 0) return 2;
+    if (s.indexOf('困难') >= 0 || s.indexOf('高级') >= 0) return 3;
+    if (s.indexOf('极难') >= 0 || s.indexOf('地狱') >= 0) return 4;
+    return 2;
+}
+
+function starsText(n) {
+    let out = '';
+    for (let i = 0; i < n; i++) out += '★';
+    return out;
 }
 
 function pickRandom(list) {
@@ -163,29 +228,141 @@ const app = {
     renderHome() {
         const list = document.getElementById('case-list');
         if (!list) return;
-        const self = this;
-        list.innerHTML = this.allCases().map(function (c, i) {
+        const cases = this.allCases();
+
+        const kicker = document.getElementById('home-kicker');
+        if (kicker) kicker.textContent = 'CASE ARCHIVE · ' + cases.length + ' 卷宗在册';
+
+        let taken = 0, solved = 0, bestRank = '';
+        cases.forEach(function (c) {
+            const best = Leaderboard.bestOf(c.id);
+            if (!best) return;
+            taken++;
+            if (best.rank !== 'D') solved++;
+            if (!bestRank || Leaderboard.staticRank(best.rank) > Leaderboard.staticRank(bestRank)) {
+                bestRank = best.rank;
+            }
+        });
+        this.renderHomeStats(taken, solved, bestRank, cases.length);
+
+        list.innerHTML = cases.map(function (c, i) {
             const best = Leaderboard.bestOf(c.id);
             const bestText = best
                 ? '最佳 ' + best.rank + ' · ' + fmtTime(best.elapsed)
                 : '未结案';
             const no = 'No.' + (i + 1 < 10 ? '0' : '') + (i + 1);
+            const seal = best
+                ? '<span class="case-seal' + (best.rank === 'D' ? ' is-fail' : '') + '">'
+                    + (best.rank === 'D' ? '未结案' : '已结案') + '</span>'
+                : '';
             return '<button class="case-card" onclick="playSfx(\'click\');app.openCase(\'' + c.id + '\')">'
-                + '<div class="case-top">'
-                + '<span class="case-cover">' + c.cover + '</span>'
+                + '<div class="case-cover">'
+                + '<span class="case-cover-emoji">' + c.cover + '</span>'
+                + '<span class="case-cover-no">' + no + '</span>'
+                + seal
+                + '</div>'
                 + '<div class="case-tags">'
-                + '<span class="case-tag">' + no + '</span>'
-                + '<span class="case-tag is-diff">' + c.difficulty + '</span>'
+                + '<span class="case-tag is-diff">' + starsText(diffStars(c.difficulty))
+                + ' ' + c.difficulty + '</span>'
                 + '<span class="case-tag">' + c.duration + '</span>'
-                + '</div></div>'
+                + '</div>'
                 + '<div><div class="case-title">' + c.title + '</div>'
                 + '<div class="case-sub">' + c.subtitle + '</div></div>'
                 + '<div class="case-desc">' + c.desc + '</div>'
                 + '<div class="case-meta"><span>' + c.tags.join(' · ') + '</span>'
                 + '<span class="case-best">' + bestText + '</span></div>'
                 + '</button>';
-        }).join('');
+        }).join('') + this.buildGhostCards(cases.length, Math.max(0, 3 - cases.length % 3));
+
+        this.renderDaily();
         this.renderResumeSlot();
+    },
+
+    /* ---------- 每日一案 ---------- */
+    dailyCase() {
+        const cases = this.allCases();
+        if (!cases.length) return null;
+        return cases[dayIndex() % cases.length];
+    },
+
+    renderDaily() {
+        const box = document.getElementById('daily-slot');
+        if (!box) return;
+        const c = this.dailyCase();
+        if (!c) { box.innerHTML = ''; return; }
+
+        const rec = Daily.today();
+        const done = !!(rec && rec.caseId === c.id && rec.rank !== 'D');
+        const p = this.loadProgress();
+        const going = !!(p && p.caseId === c.id && p.isDaily && !done);
+
+        let btn = '接手今日案件 →';
+        let note = '每天一桩，明日换案';
+        if (done) {
+            btn = '再办一次 →';
+            note = '今日已完成 · ' + rec.rank + ' 级 · ' + fmtTime(rec.elapsed);
+        }
+        else if (going) {
+            btn = '继续今日案 →';
+            const seen = Object.keys(p.seen || {}).length;
+            note = '已勘察 ' + seen + '/' + c.evidence.length + ' 件证物';
+        }
+
+        const idx = this.allCases().findIndex(function (x) { return x.id === c.id; });
+        const no = 'No.' + (idx + 1 < 10 ? '0' : '') + (idx + 1);
+
+        box.innerHTML = '<div class="daily-card' + (done ? ' is-done' : '') + '">'
+            + '<span class="daily-mark">' + c.cover + '</span>'
+            + '<div class="daily-main">'
+            + '<span class="daily-kicker">每日一案 · ' + dayLabel() + '</span>'
+            + '<div class="daily-title">' + c.title
+            + '<span class="daily-no">' + no + '</span>'
+            + '<span class="daily-stars">' + starsText(diffStars(c.difficulty)) + '</span></div>'
+            + '<p class="daily-desc">' + c.desc + '</p>'
+            + '</div>'
+            + '<div class="daily-side">'
+            + '<button class="daily-btn" onclick="playSfx(\'click\');app.openDailyCase()">' + btn + '</button>'
+            + '<span class="daily-note' + (done ? ' is-done' : '') + '">' + note + '</span>'
+            + '</div>'
+            + '</div>';
+    },
+
+    openDailyCase() {
+        const c = this.dailyCase();
+        if (!c) return;
+        const p = this.loadProgress();
+        if (p && p.caseId === c.id && p.isDaily) { this.resumeCase(); return; }
+        this.openCase(c.id, true);
+    },
+
+    renderHomeStats(taken, solved, bestRank, total) {
+        const box = document.getElementById('home-stats');
+        if (!box) return;
+        const items = [
+            { label: '已接手', value: taken + '<em>/' + total + '</em>', cls: '' },
+            { label: '已结案', value: solved + '<em>桩</em>', cls: solved ? 'is-gold' : '' },
+            { label: '最佳评级', value: bestRank || '—', cls: bestRank ? (bestRank === 'D' ? 'is-fail' : 'is-gold') : '' }
+        ];
+        box.innerHTML = items.map(function (it) {
+            return '<div class="home-stat">'
+                + '<span class="stat-value ' + it.cls + '">' + it.value + '</span>'
+                + '<span class="stat-label">' + it.label + '</span>'
+                + '</div>';
+        }).join('');
+    },
+
+    buildGhostCards(used, n) {
+        let html = '';
+        for (let i = 0; i < n; i++) {
+            const no = 'No.' + (used + i + 1 < 10 ? '0' : '') + (used + i + 1);
+            html += '<div class="case-card is-ghost">'
+                + '<div class="case-cover"><span class="case-cover-emoji">🗂️</span>'
+                + '<span class="case-cover-no">' + no + '</span></div>'
+                + '<div class="ghost-title">档案整理中</div>'
+                + '<div class="ghost-desc">这一格的卷宗还在誊抄。先把眼前的案子办完，档案柜里还有空位。</div>'
+                + '</div>';
+        }
+        return html;
     },
 
     backHome() {
@@ -212,6 +389,7 @@ const app = {
             this.state.elapsed = Math.floor((Date.now() - this.state.startedAt) / 1000);
             localStorage.setItem(PROGRESS_KEY, JSON.stringify({
                 caseId: this.state.caseId,
+                isDaily: !!this.state.isDaily,
                 elapsed: this.state.elapsed,
                 found: this.state.found,
                 seen: this.state.seen,
@@ -237,6 +415,8 @@ const app = {
         if (!p || !p.caseId) { slot.innerHTML = ''; return; }
         const c = this.allCases().filter(function (x) { return x.id === p.caseId; })[0];
         if (!c) { slot.innerHTML = ''; return; }
+        const dc = this.dailyCase();
+        if (p.isDaily && dc && dc.id === p.caseId) { slot.innerHTML = ''; return; }
         const seen = Object.keys(p.seen || {}).length;
         slot.innerHTML = '<button class="resume-card" onclick="playSfx(\'click\');app.resumeCase()">'
             + '<span>'
@@ -258,6 +438,7 @@ const app = {
         this.caseData = c;
         this.state = {
             caseId: c.id,
+            isDaily: !!p.isDaily,
             startedAt: Date.now() - (p.elapsed || 0) * 1000,
             elapsed: p.elapsed || 0,
             found: p.found || {},
@@ -287,14 +468,19 @@ const app = {
     },
 
     /* ---------- 简报 ---------- */
-    openCase(caseId) {
+    openCase(caseId, isDaily) {
         const c = this.allCases().filter(function (x) { return x.id === caseId; })[0];
         if (!c) return;
+        this.dailyPending = !!isDaily;
         this.caseData = c;
         this.state = null;
         this.currentPid = null;
         this.selectedEvidence = null;
+        this.focusPersonId = null;
 
+        const idx = this.allCases().findIndex(function (x) { return x.id === c.id; });
+        document.getElementById('brief-no').textContent =
+            'CASE FILE No.' + (idx + 1 < 10 ? '0' : '') + (idx + 1);
         document.getElementById('brief-tag').textContent = c.tags.join(' · ').toUpperCase();
         document.getElementById('brief-title').textContent = c.title;
         document.getElementById('brief-sub').textContent = c.subtitle;
@@ -340,6 +526,9 @@ const app = {
                 + '</div>';
         }).join('');
 
+        this.renderRelationMap();
+        this.renderRelationDetail();
+
         this.showScreen('screen-brief');
     },
 
@@ -356,6 +545,7 @@ const app = {
 
         this.state = {
             caseId: c.id,
+            isDaily: !!this.dailyPending,
             startedAt: Date.now(),
             elapsed: 0,
             found: found,
@@ -910,12 +1100,18 @@ const app = {
         if (!body) return;
         const self = this;
 
-        const dTab = document.getElementById('ntab-deductions');
-        const tTab = document.getElementById('ntab-timeline');
-        if (dTab && dTab.classList) dTab.classList.toggle('is-active', this.notesTab === 'deductions');
-        if (tTab && tTab.classList) tTab.classList.toggle('is-active', this.notesTab === 'timeline');
+        const tabMap = {
+            deductions: 'ntab-deductions',
+            timeline: 'ntab-timeline',
+            dossier: 'ntab-dossier'
+        };
+        Object.keys(tabMap).forEach(function (key) {
+            const el = document.getElementById(tabMap[key]);
+            if (el && el.classList) el.classList.toggle('is-active', app.notesTab === key);
+        });
 
         if (this.notesTab === 'timeline') { this.renderTimeline(body, count); return; }
+        if (this.notesTab === 'dossier') { this.renderDossier(body, count); return; }
 
         const items = this.caseData.deductions.filter(function (d) { return self.state.found[d.id]; });
         if (count) count.textContent = items.length + '/' + this.caseData.deductions.length;
@@ -947,6 +1143,102 @@ const app = {
             + '<div class="timeline-hint">已确认 ' + shown + '/' + items.length
             + ' 个时间点。勘察证物、逼出口供都会点亮新的节点。</div>';
         if (count) count.textContent = shown + '/' + items.length;
+    },
+
+    /* ---------- 关系网 ---------- */
+    buildRelationSvg() {
+        const self = this;
+        const people = this.caseData.suspects;
+        const relations = this.caseData.relations || [];
+        const n = people.length;
+        const cx = 150, cy = 128, radius = 92;
+        const pos = {};
+
+        people.forEach(function (p, i) {
+            const ang = -Math.PI / 2 + i * 2 * Math.PI / n;
+            pos[p.pid] = { x: cx + radius * Math.cos(ang), y: cy + radius * Math.sin(ang) };
+        });
+
+        const lines = relations.map(function (rel) {
+            const a = pos[rel.a], b = pos[rel.b];
+            if (!a || !b) return '';
+            const on = self.focusPersonId && (rel.a === self.focusPersonId || rel.b === self.focusPersonId);
+            return '<line class="rel-line' + (on ? ' is-on' : '') + '" x1="' + a.x.toFixed(1)
+                + '" y1="' + a.y.toFixed(1) + '" x2="' + b.x.toFixed(1) + '" y2="' + b.y.toFixed(1) + '"/>';
+        }).join('');
+
+        const nodes = people.map(function (p) {
+            const pt = pos[p.pid];
+            const on = self.focusPersonId === p.pid;
+            return '<g class="rel-node' + (on ? ' is-on' : '') + '"'
+                + ' onclick="app.focusPerson(\'' + p.pid + '\')">'
+                + '<circle cx="' + pt.x.toFixed(1) + '" cy="' + pt.y.toFixed(1) + '" r="21"/>'
+                + '<text class="rel-emoji" x="' + pt.x.toFixed(1) + '" y="' + (pt.y + 5).toFixed(1)
+                + '" text-anchor="middle">' + p.emoji + '</text>'
+                + '<text class="rel-name" x="' + pt.x.toFixed(1) + '" y="' + (pt.y + 34).toFixed(1)
+                + '" text-anchor="middle">' + p.name + '</text>'
+                + '</g>';
+        }).join('');
+
+        return '<svg viewBox="0 0 300 268" xmlns="http://www.w3.org/2000/svg">'
+            + lines + nodes + '</svg>';
+    },
+
+    renderRelationMap() {
+        const box = document.getElementById('relation-map');
+        if (!box || !this.caseData) return;
+        box.innerHTML = this.buildRelationSvg();
+    },
+
+    renderRelationDetail() {
+        const box = document.getElementById('relation-detail');
+        if (!box || !this.caseData) return;
+        const self = this;
+        const pid = this.focusPersonId;
+        if (!pid) {
+            box.innerHTML = '点一个人，看看他和这屋子里其他人的关系。';
+            return;
+        }
+        const person = this.caseData.suspects.filter(function (s) { return s.pid === pid; })[0];
+        const list = (this.caseData.relations || []).filter(function (r) {
+            return r.a === pid || r.b === pid;
+        });
+        if (!person || !list.length) {
+            box.innerHTML = '这个人在这间屋子里没有更多关系。';
+            return;
+        }
+        box.innerHTML = '<div class="rel-focus">' + person.emoji + ' ' + person.name + ' 的关系</div>'
+            + list.map(function (r) {
+                const otherId = r.a === pid ? r.b : r.a;
+                const other = self.caseData.suspects.filter(function (s) { return s.pid === otherId; })[0];
+                return '<div class="rel-row">'
+                    + '<div class="rel-pair">' + (other ? other.name : '？') + ' · ' + r.label + '</div>'
+                    + '<div class="rel-text">' + r.detail + '</div></div>';
+            }).join('');
+    },
+
+    focusPerson(pid) {
+        this.focusPersonId = this.focusPersonId === pid ? null : pid;
+        this.renderRelationMap();
+        this.renderRelationDetail();
+        playSfx('click');
+    },
+
+    /* ---------- 卷宗附件 ---------- */
+    renderDossier(body, count) {
+        const docs = this.caseData.dossier || [];
+        if (count) count.textContent = docs.length ? docs.length + ' 份' : '';
+        if (!docs.length) {
+            body.innerHTML = '<p class="notes-empty">这一案还没有归档文件。</p>';
+            return;
+        }
+        body.innerHTML = docs.map(function (d) {
+            return '<div class="doc-item">'
+                + '<div class="doc-type">' + d.type + '</div>'
+                + '<div class="doc-title">' + d.title + '</div>'
+                + '<p class="doc-body">' + d.body + '</p>'
+                + '</div>';
+        }).join('');
     },
 
     showHint() {
@@ -1084,6 +1376,21 @@ const app = {
 
     renderResult(r) {
         this.lastResult = r;
+
+        const idx = this.allCases().findIndex(function (x) { return x.id === app.caseData.id; });
+        const no = idx >= 0 ? idx + 1 : 1;
+        const reportNo = document.getElementById('report-no');
+        if (reportNo) {
+            reportNo.textContent = (this.state && this.state.isDaily ? '每日一案 · ' : '')
+                + 'No.' + (no < 10 ? '0' : '') + no
+                + ' · ' + new Date().toLocaleDateString('zh-CN');
+        }
+        const seal = document.getElementById('result-seal');
+        if (seal) {
+            seal.textContent = r.culpritOk ? '已结案' : '未结案';
+            seal.className = 'seal' + (r.culpritOk ? '' : ' is-fail');
+        }
+
         const t = this.caseData.truth;
         const titles = {
             S: ['真相大白', '每一条证据都咬合在一起，你几乎没有多余的动作。'],
@@ -1135,7 +1442,13 @@ const app = {
                 misses: this.state.misses,
                 at: Date.now()
             });
-            if (isBest) this.showToast('本机最佳记录已更新', 'gold');
+            if (this.state.isDaily) {
+                const dailyNew = Daily.record(this.caseData.id, r.rank, r.elapsed);
+                this.showToast(dailyNew ? '每日一案已记入档案' : '今日已有更好的成绩', 'gold');
+            }
+            else if (isBest) {
+                this.showToast('本机最佳记录已更新', 'gold');
+            }
         }
     },
 
