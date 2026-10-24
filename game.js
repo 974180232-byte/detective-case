@@ -8,6 +8,7 @@ const RECORDS_KEY = 'detective_records_v1';
 const MUTE_KEY = 'detective_muted_v1';
 const PROGRESS_KEY = 'detective_progress_v1';
 const DAILY_KEY = 'detective_daily_v1';
+const DAILY_CASES_KEY = 'detective_daily_cases_v1';
 
 /* ---------------- 本机排行榜 ----------------
    目前只写 localStorage。将来接数据库时，只需要把
@@ -141,6 +142,20 @@ function dayLabel() {
     return (t.getMonth() + 1) + ' 月 ' + t.getDate() + ' 日 · ' + week;
 }
 
+/* 每日案件缓存：{ 'YYYY-MM-DD': 案件对象 }，一旦收录就永久保留在本机 */
+function loadDailyCases() {
+    try {
+        const raw = JSON.parse(localStorage.getItem(DAILY_CASES_KEY) || '{}');
+        return raw && typeof raw === 'object' ? raw : {};
+    }
+    catch (e) { return {}; }
+}
+
+function saveDailyCases(map) {
+    try { localStorage.setItem(DAILY_CASES_KEY, JSON.stringify(map)); }
+    catch (e) { /* 配额或隐私模式，忽略 */ }
+}
+
 /* 难度文字 → 星级。新案件沿用「入门 / 进阶 / 困难 / 极难」即可自动识别 */
 function diffStars(level) {
     const s = String(level || '');
@@ -190,6 +205,7 @@ const app = {
         if (btn) btn.textContent = this.muted ? '🔇' : '🔊';
         this.renderHome();
         this.showScreen('screen-home');
+        this.syncDailyCases();
     },
 
     showScreen(id) {
@@ -222,7 +238,56 @@ const app = {
 
     /* ---------- 首页 ---------- */
     allCases() {
-        return (typeof window !== 'undefined' && Array.isArray(window.CASES)) ? window.CASES : [];
+        const base = (typeof window !== 'undefined' && Array.isArray(window.CASES)) ? window.CASES : [];
+        const extra = this.cachedCases();
+        if (!extra.length) return base;
+        const ids = {};
+        base.forEach(function (c) { ids[c.id] = true; });
+        return base.concat(extra.filter(function (c) { return c && c.id && !ids[c.id]; }));
+    },
+
+    /* 已收录的每日案件，按日期升序 */
+    cachedCases() {
+        const map = loadDailyCases();
+        return Object.keys(map).sort().map(function (k) { return map[k]; })
+            .filter(function (c) {
+                return c && c.id && Array.isArray(c.suspects) && Array.isArray(c.evidence);
+            });
+    },
+
+    /* 拉取 daily/index.json，把最近几天未收录的案件存进本机（失败静默） */
+    syncDailyCases() {
+        const self = this;
+        if (typeof fetch !== 'function') return;
+        const stamp = Date.now();
+        fetch('daily/index.json?t=' + stamp, { cache: 'no-store' })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (index) {
+                if (!index || typeof index !== 'object') return null;
+                const cached = loadDailyCases();
+                const missing = Object.keys(index).sort().slice(-7).filter(function (d) {
+                    return !cached[d];
+                });
+                if (!missing.length) return null;
+                return Promise.all(missing.map(function (d) {
+                    return fetch('daily/' + index[d] + '?t=' + stamp)
+                        .then(function (r) { return r.ok ? r.json() : null; })
+                        .catch(function () { return null; });
+                })).then(function (list) {
+                    const map = loadDailyCases();
+                    let added = 0;
+                    list.forEach(function (c, i) {
+                        if (!c || !c.id || map[missing[i]]) return;
+                        map[missing[i]] = c;
+                        added++;
+                    });
+                    if (!added) return;
+                    saveDailyCases(map);
+                    self.renderHome();
+                    self.showToast('新案件已收入档案柜', 'gold');
+                });
+            })
+            .catch(function () { /* 离线或 file:// 打开时静默跳过 */ });
     },
 
     renderHome() {
@@ -280,6 +345,9 @@ const app = {
 
     /* ---------- 每日一案 ---------- */
     dailyCase() {
+        const todayId = 'daily-' + todayKey();
+        const picked = this.cachedCases().filter(function (c) { return c.id === todayId; })[0];
+        if (picked) return picked;
         const cases = this.allCases();
         if (!cases.length) return null;
         return cases[dayIndex() % cases.length];

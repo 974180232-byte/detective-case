@@ -2,7 +2,7 @@
 
 单机侦探推理网页游戏。一次一桩案件：读完卷宗、勘察现场、审讯五名嫌疑人、用证物对质，最后提交指控。一局约 10-15 分钟。
 
-纯静态站点：原生 HTML / CSS / JavaScript，无框架、无构建、无后端、无网络请求。
+纯静态站点：原生 HTML / CSS / JavaScript，无框架、无构建、无后端。唯一的网络请求是启动时拉取「每日一案」清单，失败就静默回退到内置案件。
 
 ## 玩法
 
@@ -19,9 +19,7 @@
 
 ## 本地运行
 
-直接双击 `index.html` 即可（没有任何 `fetch` 或模块加载）。
-
-想用本地服务器：
+双击 `index.html` 可以玩内置案件，但浏览器会拦掉 `file://` 下的 `fetch`，每日一案拉不到（静默跳过，不报错）。要验证每日案件，用本地服务器：
 
 ```powershell
 # 任选其一
@@ -51,8 +49,10 @@ powershell -ExecutionPolicy Bypass -File .\push.ps1 -Message "feat: 侦探档案
 ```
 index.html    五个界面：案件列表 / 简报 / 调查台 / 指控 / 结案
 style.css     全部样式（暗色卷宗风，三栏调查台，移动端单列）
-cases.js      案件数据（目前两桩：雨夜书房、钟楼十二响）
-game.js       流程、状态、判定、渲染、音效、本机排行榜
+cases.js      内置案件数据（雨夜书房、钟楼十二响）
+game.js       流程、状态、判定、渲染、音效、本机排行榜、每日案件同步
+daily/        每日一案：index.json 清单 + 每案一个 JSON
+tools/        check-case.js 案件自检脚本
 push.ps1      自动提交脚本（失败无限重试）
 ```
 
@@ -71,6 +71,47 @@ push.ps1      自动提交脚本（失败无限重试）
 
 所有 id 必须全局唯一（建议 `ev-` / `s-` / `d-` / `m-` 前缀）。改完刷新页面即可验证。
 
+## 每日一案
+
+首页统计条下方的横幅就是「每日一案」。选案顺序：
+
+1. `daily/index.json` 里有今天日期、且这一案已被本机收录 → 用它；
+2. 否则按日期在全部案件里轮换（`dayIndex() % cases.length`），保证任何时候都有案子可玩。
+
+启动时 `game.js` 会 `fetch('daily/index.json')`，把最近 7 天里本机还没有的案件拉下来，存进 `localStorage`（`detective_daily_cases_v1`），成功后提示「新案件已收入档案柜」。**收录过的案件永久保留**，之后断网也能玩；`fetch` 失败（离线、`file://` 打开）时完全静默，内置案件不受影响。
+
+```
+daily/index.json       { "2026-10-24": "2026-10-24.json" }   日期 → 文件名
+daily/2026-10-24.json  一个完整案件对象，schema 与 cases.js 一致
+tools/check-case.js    发布前自检脚本
+```
+
+案件 `id` 必须写成 `daily-YYYY-MM-DD`，且与清单里的键一致——前端靠它判断「今天有没有新案」。
+
+### 发布流程（人工触发，不是定时任务）
+
+每天由作者说一句「生成今日案件」，然后：
+
+1. 按 `cases.js` 的 schema 写 `daily/<今天>.json`（4 名嫌疑人 / 7 件证物 / 6 条推论，约 3000-4000 字）；
+2. 在 `daily/index.json` 增加一行；
+3. 跑自检，**必须 0 错误**：
+
+   ```powershell
+   node tools/check-case.js daily/2026-10-24.json
+   ```
+
+   检查内容：顶层字段齐全、id 不与已有案件重复、`deductions.needs` / `confront.evidence` / `confront.requires` / `confront.unlock` / `timeline.needs` / `floorPlan.spots` / `relations.a,b` / `truth.culprit` / `truth.motive` / `truth.evidence` 的引用全部闭合；另外会警告「有证物拿不到任何用途」「被逼问出的口供没有入口解锁」这类死内容。
+
+4. 通过后提交推送：
+
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File .\push.ps1 -Message "daily: 2026-10-24 末班电车"
+   ```
+
+GitHub Pages 约一分钟后生效，玩家下次刷新首页即自动收案。
+
+校验不通过就停下，不要推送。宁可当天回退到轮换的旧案，也不要上线一桩点不动的案子。
+
 ## 排行榜（预留）
 
 目前只有本机记录：`game.js` 里的 `Leaderboard` 把成绩写进 `localStorage`（`detective_records_v1`），只保留每桩案件的最佳评级。首页卡片会显示「最佳 S · 03:42」。
@@ -81,4 +122,6 @@ push.ps1      自动提交脚本（失败无限重试）
 
 - 没有后端，成绩只存在本机，清缓存即丢。
 - 调查进度自动存在本机（localStorage），刷新后首页会出现「未结案的卷宗」可继续；结案或主动放弃后清除。
-- 案件是人工撰写的固定内容，暂未接入 AI 生成；`cases.js` 的数据结构已经可以直接作为生成结果的落地格式。
+- 每日一案是人工触发后生成并提交的，不是定时任务；没有新案的日子会回退到按日期轮换。
+- 每日案件缓存在本机，清浏览器缓存后需要联网重新拉取（内置案件不受影响）。
+- 每日案件的质量依赖发布前的人工抽检：`check-case.js` 只能保证「引用不断裂」，不能保证「只有唯一解」。偶尔需要真的玩一遍。
