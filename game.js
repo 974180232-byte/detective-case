@@ -109,6 +109,10 @@ const app = {
     muted: false,
     notesTab: 'deductions',
     dossierOpen: false,
+    combinePick: [],
+    combineHint: null,
+    combineMisses: 0,
+    combineStatus: { text: '', cls: '' },
     panel: 'evidence',
     lastResult: null,
     accusation: { pid: null, evidence: [], motive: null },
@@ -268,6 +272,9 @@ const app = {
         this.lastResponse = null;
         this.notesTab = 'deductions';
         this.dossierOpen = false;
+        this.combinePick = [];
+        this.combineHint = null;
+        this.combineStatus = { text: '', cls: '' };
         this.accusation = { pid: null, evidence: [], motive: null };
 
         document.getElementById('game-case-name').textContent = c.title + ' · ' + c.subtitle;
@@ -317,6 +324,11 @@ const app = {
             else { sceneBox.innerHTML = ''; }
         }
 
+        const planBox = document.getElementById('brief-plan');
+        if (planBox) {
+            planBox.innerHTML = this.buildFloorPlanSvg(c.floorPlan, false);
+        }
+
         document.getElementById('brief-summary').textContent = c.brief.summary;
 
         document.getElementById('brief-roster').innerHTML = c.suspects.map(function (s) {
@@ -358,6 +370,9 @@ const app = {
         this.lastResponse = null;
         this.notesTab = 'deductions';
         this.dossierOpen = false;
+        this.combinePick = [];
+        this.combineHint = null;
+        this.combineStatus = { text: '', cls: '' };
         this.accusation = { pid: null, evidence: [], motive: null };
 
         document.getElementById('game-case-name').textContent = c.title + ' · ' + c.subtitle;
@@ -403,6 +418,7 @@ const app = {
     renderGame() {
         this.renderStats();
         this.renderEvidence();
+        this.renderFloorPlan();
         this.renderEvidenceDetail();
         this.renderSuspectTabs();
         this.renderInterview();
@@ -474,17 +490,13 @@ const app = {
         this.selectedEvidence = evidenceId;
         this.state.seen[evidenceId] = true;
         this.state.found[evidenceId] = true;
-        const added = this.checkDeductions();
         this.renderEvidence();
+        this.renderFloorPlan();
         this.renderEvidenceDetail();
         this.renderInterview();
         this.renderStats();
         this.renderNotes();
         this.saveProgress();
-        if (added > 0) {
-            playSfx('clue');
-            this.showToast('推理笔记 +' + added, 'gold');
-        }
     },
 
     renderEvidenceDetail() {
@@ -631,7 +643,6 @@ const app = {
         if (!target) { this.showToast('他没什么可补充的了'); return; }
         this.state.found[target.id] = true;
         this.state.fresh[target.id] = true;
-        const added = this.checkDeductions();
         playSfx('click');
         this.renderSuspectTabs();
         this.renderInterview();
@@ -639,10 +650,6 @@ const app = {
         this.renderNotes();
         this.saveProgress();
         this.state.fresh = {};
-        if (added > 0) {
-            playSfx('clue');
-            this.showToast('推理笔记 +' + added, 'gold');
-        }
     },
 
     /* ---------- 对质 ---------- */
@@ -677,34 +684,219 @@ const app = {
             playSfx('click');
         }
 
-        const added = this.checkDeductions();
         this.renderSuspectTabs();
         this.renderInterview();
         this.renderStats();
         this.renderNotes();
         this.saveProgress();
-        if (added > 0) {
-            playSfx('clue');
-            this.showToast('推理笔记 +' + added, 'gold');
+    },
+
+    /* ---------- 现场平面图 ---------- */
+    buildFloorPlanSvg(fp, interactive) {
+        if (!fp) return '';
+        const self = this;
+
+        const shapes = (fp.shapes || []).map(function (s) {
+            if (s.type === 'rect') {
+                const cls = (s.w >= 200 || s.h >= 100) ? 'fp-room' : 'fp-furniture';
+                return '<rect class="' + cls + '" x="' + s.x + '" y="' + s.y + '" width="' + s.w
+                    + '" height="' + s.h + '" rx="1"/>';
+            }
+            if (s.type === 'line') {
+                return '<line class="fp-line" x1="' + s.x1 + '" y1="' + s.y1
+                    + '" x2="' + s.x2 + '" y2="' + s.y2 + '"/>';
+            }
+            if (s.type === 'label') {
+                return '<text class="fp-label" x="' + s.x + '" y="' + s.y + '">' + s.text + '</text>';
+            }
+            return '';
+        }).join('');
+
+        const spots = (fp.spots || []).map(function (sp) {
+            const seen = !!(self.state && self.state.seen[sp.evidence]);
+            const active = self.selectedEvidence === sp.evidence;
+            const cls = 'fp-spot' + (seen ? ' is-seen' : '') + (active ? ' is-active' : '');
+            const ev = self.caseData.evidence.filter(function (e) { return e.id === sp.evidence; })[0];
+            const name = sp.name || (ev ? ev.name : '');
+            const click = interactive
+                ? ' onclick="playSfx(\'click\');app.selectEvidence(\'' + sp.evidence + '\')"'
+                : '';
+            return '<g class="' + cls + '"' + click + '>'
+                + '<circle cx="' + sp.x + '" cy="' + sp.y + '" r="6.5"/>'
+                + '<text x="' + sp.x + '" y="' + (sp.y + 13) + '" text-anchor="middle">' + name + '</text>'
+                + '</g>';
+        }).join('');
+
+        return '<svg viewBox="0 0 280 160" xmlns="http://www.w3.org/2000/svg">'
+            + shapes + spots + '</svg>';
+    },
+
+    renderFloorPlan() {
+        const box = document.getElementById('floor-plan');
+        if (!box || !this.caseData) return;
+        box.innerHTML = this.buildFloorPlanSvg(this.caseData.floorPlan, true);
+    },
+
+    /* ---------- 证据关联台 ---------- */
+    openCombine() {
+        if (!this.state) return;
+        this.combinePick = [];
+        this.combineHint = null;
+        this.combineStatus = { text: '', cls: '' };
+        this.renderCombine();
+        const modal = document.getElementById('combine-modal');
+        if (modal) modal.classList.remove('hidden');
+        playSfx('click');
+    },
+
+    closeCombine() {
+        const modal = document.getElementById('combine-modal');
+        if (modal) modal.classList.add('hidden');
+        this.combinePick = [];
+        this.combineHint = null;
+        this.combineStatus = { text: '', cls: '' };
+    },
+
+    combineItems() {
+        const self = this;
+        const evidences = this.caseData.evidence.filter(function (e) {
+            return self.state.seen[e.id];
+        }).map(function (e) {
+            return { id: e.id, icon: e.icon, label: e.name, kind: 'ev' };
+        });
+
+        const statements = [];
+        this.caseData.suspects.forEach(function (s) {
+            s.statements.forEach(function (st) {
+                if (!self.state.found[st.id]) return;
+                statements.push({
+                    id: st.id,
+                    icon: s.emoji,
+                    label: s.name + '：' + st.text,
+                    kind: 'st'
+                });
+            });
+        });
+
+        return { evidences: evidences, statements: statements };
+    },
+
+    renderCombine() {
+        const items = this.combineItems();
+        const self = this;
+        const picked = this.combinePick;
+        const all = items.evidences.concat(items.statements);
+
+        const pickedBox = document.getElementById('combine-picked');
+        if (pickedBox) {
+            pickedBox.innerHTML = [0, 1].map(function (i) {
+                const id = picked[i];
+                const item = id ? all.filter(function (x) { return x.id === id; })[0] : null;
+                return '<span class="combine-slot' + (item ? ' is-filled' : '') + '">'
+                    + (item ? item.icon + ' ' + item.label : '选择第 ' + (i + 1) + ' 条线索')
+                    + '</span>';
+            }).join('');
+        }
+
+        const renderList = function (list) {
+            if (!list.length) return '<p class="notes-empty">还没有可用的线索。</p>';
+            return list.map(function (x) {
+                return '<button class="combine-item' + (picked.indexOf(x.id) >= 0 ? ' is-picked' : '')
+                    + (self.combineHint === x.id ? ' is-hint' : '') + '"'
+                    + ' onclick="playSfx(\'click\');app.pickCombine(\'' + x.id + '\')">'
+                    + '<span class="ci-icon">' + x.icon + '</span>'
+                    + '<span>' + x.label + '</span></button>';
+            }).join('');
+        };
+
+        const evBox = document.getElementById('combine-evidence');
+        const stBox = document.getElementById('combine-statements');
+        if (evBox) evBox.innerHTML = renderList(items.evidences);
+        if (stBox) stBox.innerHTML = renderList(items.statements);
+
+        const status = document.getElementById('combine-status');
+        if (status) {
+            const s = this.combineStatus || { text: '', cls: '' };
+            status.className = 'combine-status' + (s.cls ? ' is-' + s.cls : '');
+            status.textContent = s.text || '';
         }
     },
 
-    /* ---------- 推理笔记 ---------- */
-    checkDeductions() {
-        if (!this.state) return 0;
-        let added = 0;
-        const self = this;
-        this.caseData.deductions.forEach(function (d) {
-            if (self.state.found[d.id]) return;
-            const ready = d.needs.every(function (n) { return self.state.found[n]; });
-            if (ready) {
-                self.state.found[d.id] = true;
-                self.state.fresh[d.id] = true;
-                added++;
+    pickCombine(id) {
+        const idx = this.combinePick.indexOf(id);
+        if (idx >= 0) {
+            this.combinePick.splice(idx, 1);
+        }
+        else {
+            if (this.combinePick.length >= 2) {
+                this.showToast('一次只能关联两条线索', 'red');
+                return;
             }
-        });
-        return added;
+            this.combinePick.push(id);
+        }
+        this.combineStatus = { text: '', cls: '' };
+        this.renderCombine();
     },
+
+    findHintPair() {
+        const self = this;
+        const target = this.caseData.deductions.filter(function (d) {
+            if (self.state.found[d.id]) return false;
+            return (d.needs || []).every(function (n) { return self.state.found[n]; });
+        })[0];
+        if (!target || !target.needs || target.needs.length !== 2) return null;
+        return { a: target.needs[0], b: target.needs[1] };
+    },
+
+    doCombine() {
+        if (!this.state) return;
+        if (this.combinePick.length !== 2) {
+            this.showToast('先选两条线索', 'red');
+            return;
+        }
+        const a = this.combinePick[0];
+        const b = this.combinePick[1];
+
+        const hit = this.caseData.deductions.filter(function (d) {
+            if (!d.needs || d.needs.length !== 2) return false;
+            return d.needs.indexOf(a) >= 0 && d.needs.indexOf(b) >= 0;
+        })[0];
+
+        if (hit) {
+            if (this.state.found[hit.id]) {
+                this.combineStatus = { text: '这条关联你已经记下了：' + hit.text, cls: 'ok' };
+            }
+            else {
+                this.state.found[hit.id] = true;
+                this.combineStatus = { text: '关联成立 —— ' + hit.text, cls: 'ok' };
+                playSfx('clue');
+                this.showToast('推理笔记 +1', 'gold');
+                this.saveProgress();
+            }
+            this.renderNotes();
+            this.renderStats();
+            this.combinePick = [];
+            this.combineHint = null;
+            this.renderCombine();
+            return;
+        }
+
+        this.combineMisses++;
+        this.combineStatus = { text: '这两件事对不上。换个角度试试。', cls: 'no' };
+        playSfx('wrong');
+
+        if (this.combineMisses % 3 === 0) {
+            const pair = this.findHintPair();
+            if (pair) {
+                this.combineHint = pair.a;
+                this.combineStatus = { text: '提示：高亮的这条线索，能和对面的某一条对上。', cls: 'ok' };
+            }
+        }
+        this.combinePick = [];
+        this.renderCombine();
+    },
+
+    /* ---------- 推理笔记 ---------- */
 
     setNotesTab(tab) {
         this.notesTab = tab;
@@ -729,7 +921,7 @@ const app = {
         if (count) count.textContent = items.length + '/' + this.caseData.deductions.length;
 
         if (!items.length) {
-            body.innerHTML = '<p class="notes-empty">勘察证物、追问口供、用证据逼问——当你把两件事对上的时候，推论会自动出现在这里。</p>';
+            body.innerHTML = '<p class="notes-empty">勘察证物、追问口供，然后点「关联证据」把两条线索放在一起——关联成立，推论就会记在这里。</p>';
             return;
         }
         body.innerHTML = items.map(function (d, i) {
@@ -760,6 +952,19 @@ const app = {
     showHint() {
         if (!this.state) return;
         this.state.hints++;
+        this.saveProgress();
+
+        const pair = this.findHintPair();
+        if (pair) {
+            this.openCombine();
+            this.combineHint = pair.a;
+            this.combineStatus = { text: '已经有两条线索能对上了，先拿高亮的这条去配。', cls: 'ok' };
+            this.renderCombine();
+            playSfx('clue');
+            this.showToast('有一组线索可以关联，试试组合台', 'gold');
+            return;
+        }
+
         this.showToast('💡 ' + this.caseData.hint, 'gold');
         playSfx('clue');
     },

@@ -44,6 +44,7 @@
 
             <h3 class="section-title">你看到的现场</h3>
             <div id="scene-block" class="scene-block"></div>
+            <div id="brief-plan" class="floor-plan floor-plan-lg"></div>
 
             <h3 class="section-title">案情摘要</h3>
             <p class="brief-summary" id="brief-summary"></p>
@@ -79,6 +80,7 @@
                     <h3>现场证物</h3>
                     <span class="panel-hint">点击查看</span>
                 </div>
+                <div id="floor-plan" class="floor-plan"></div>
                 <div id="evidence-grid" class="evidence-grid"></div>
                 <div id="evidence-detail" class="evidence-detail hidden"></div>
             </aside>
@@ -104,6 +106,7 @@
 
         <div class="game-actions">
             <button class="btn-ghost" onclick="app.showHint()">💡 要个方向</button>
+            <button class="btn-ghost" onclick="app.openCombine()">🔗 关联证据</button>
             <button class="btn-primary" onclick="app.openAccuse()">提交指控</button>
         </div>
     </section>
@@ -150,6 +153,35 @@
             </div>
         </div>
     </section>
+
+    <!-- 证据关联台 -->
+    <div id="combine-modal" class="modal-overlay hidden">
+        <div class="modal combine-modal">
+            <div class="combine-head">
+                <h2>证据关联</h2>
+                <button class="icon-btn" onclick="app.closeCombine()" title="关闭">✕</button>
+            </div>
+            <p class="combine-tip">选两件线索，建立关联。证物与证物、证物与口供，都可能对上。</p>
+            <div id="combine-picked" class="combine-picked"></div>
+            <div class="combine-body">
+                <div class="combine-col">
+                    <h4>已勘察证物</h4>
+                    <div id="combine-evidence" class="combine-list"></div>
+                </div>
+                <div class="combine-col">
+                    <h4>已获口供</h4>
+                    <div id="combine-statements" class="combine-list"></div>
+                </div>
+            </div>
+            <div class="combine-foot">
+                <span id="combine-status" class="combine-status"></span>
+                <div class="combine-buttons">
+                    <button class="btn-ghost" onclick="app.closeCombine()">返回</button>
+                    <button class="btn-primary" onclick="app.doCombine()">建立关联</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <div id="toast" class="toast hidden"></div>
 </div>

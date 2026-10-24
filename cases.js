@@ -58,6 +58,33 @@ window.CASES = [
             { time: '22:15', text: '周伯在后门遇见湿着头发的苏婉。', needs: ['s-zhou-2'] },
             { time: '22:20', text: '周伯送药，发现门反锁，撞门。', needs: [] }
         ],
+        floorPlan: {
+            label: '顾宅二楼 · 书房',
+            shapes: [
+                { type: 'rect', x: 10, y: 10, w: 260, h: 140 },
+                { type: 'rect', x: 110, y: 26, w: 70, h: 26 },
+                { type: 'rect', x: 16, y: 62, w: 26, h: 36 },
+                { type: 'rect', x: 96, y: 96, w: 64, h: 22 },
+                { type: 'line', x1: 236, y1: 10, x2: 236, y2: 46 },
+                { type: 'line', x1: 196, y1: 150, x2: 224, y2: 150 },
+                { type: 'label', x: 140, y: 21, text: '书桌' },
+                { type: 'label', x: 29, y: 58, text: '壁炉' },
+                { type: 'label', x: 128, y: 93, text: '茶几' },
+                { type: 'label', x: 246, y: 34, text: '窗' },
+                { type: 'label', x: 208, y: 145, text: '门' }
+            ],
+            spots: [
+                { evidence: 'ev-letter', x: 128, y: 38, name: '信' },
+                { evidence: 'ev-phone', x: 160, y: 38, name: '电话' },
+                { evidence: 'ev-window', x: 262, y: 52, name: '窗' },
+                { evidence: 'ev-medicine', x: 192, y: 62, name: '药' },
+                { evidence: 'ev-teacup', x: 120, y: 106, name: '茶' },
+                { evidence: 'ev-paperweight', x: 52, y: 108, name: '镇纸' },
+                { evidence: 'ev-watch', x: 78, y: 128, name: '怀表' },
+                { evidence: 'ev-key', x: 124, y: 140, name: '钥匙' },
+                { evidence: 'ev-raincoat', x: 250, y: 132, name: '湿裙' }
+            ]
+        },
         suspects: [
             {
                 pid: 'p-su',
@@ -249,6 +276,33 @@ window.CASES = [
             { time: '00:00', text: '真正的午夜。事后没有人核对过钟声与钟表。', needs: ['ev-clock'] },
             { time: '00:10', text: '阿蘅在石板地上发现尸体。', needs: ['s-heng-1'] }
         ],
+        floorPlan: {
+            label: '望江剧院 · 钟楼剖面',
+            shapes: [
+                { type: 'rect', x: 8, y: 8, w: 264, h: 144 },
+                { type: 'rect', x: 96, y: 26, w: 56, h: 112 },
+                { type: 'line', x1: 90, y1: 26, x2: 158, y2: 26 },
+                { type: 'rect', x: 170, y: 96, w: 94, h: 40 },
+                { type: 'rect', x: 170, y: 34, w: 44, h: 34 },
+                { type: 'rect', x: 222, y: 34, w: 42, h: 34 },
+                { type: 'line', x1: 8, y1: 138, x2: 272, y2: 138 },
+                { type: 'label', x: 112, y: 22, text: '钟楼' },
+                { type: 'label', x: 178, y: 30, text: '化妆间' },
+                { type: 'label', x: 230, y: 30, text: '办公室' },
+                { type: 'label', x: 204, y: 92, text: '后台' }
+            ],
+            spots: [
+                { evidence: 'ev-wire', x: 100, y: 30, name: '钢丝' },
+                { evidence: 'ev-clock', x: 124, y: 58, name: '钟锤' },
+                { evidence: 'ev-key', x: 140, y: 106, name: '钥匙' },
+                { evidence: 'ev-note', x: 186, y: 124, name: '便条' },
+                { evidence: 'ev-tape', x: 238, y: 124, name: '磁带' },
+                { evidence: 'ev-letter', x: 192, y: 58, name: '剧本' },
+                { evidence: 'ev-wine', x: 240, y: 60, name: '酒' },
+                { evidence: 'ev-ledger', x: 248, y: 42, name: '账本' },
+                { evidence: 'ev-shoe', x: 214, y: 86, name: '鞋' }
+            ]
+        },
         suspects: [
             {
                 pid: 'p-shen',
