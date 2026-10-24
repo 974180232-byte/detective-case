@@ -1,0 +1,4 @@
+# 临时校验 / 冒烟测试脚本
+._*.js
+.DS_Store
+Thumbs.db

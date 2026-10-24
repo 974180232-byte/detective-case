@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>侦探档案 · 单机推理</title>
+    <meta name="description" content="一次一桩案件，从阅读卷宗到提交指控，10 分钟给死者一个交代。">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+    <header class="topbar">
+        <div class="brand" onclick="app.backHome()">
+            <span class="brand-mark">🕵️</span>
+            <span class="brand-text">侦探档案</span>
+        </div>
+        <div class="topbar-right">
+            <span id="case-timer" class="case-timer hidden">00:00</span>
+            <button class="icon-btn" id="mute-toggle" onclick="app.toggleMute()" title="音效开关">🔊</button>
+        </div>
+    </header>
+
+    <!-- ============ 首页：案件列表 ============ -->
+    <section id="screen-home" class="screen">
+        <div class="home-head">
+            <h1>选择你要接手的案件</h1>
+            <p>一次一桩。读完卷宗、问过口供、指认真凶——别让雨停得太早。</p>
+        </div>
+        <div id="case-list" class="case-list"></div>
+        <div class="home-foot">
+            <p>进度与最佳记录只保存在这台设备上。更多案件会陆续收入档案柜。</p>
+        </div>
+    </section>
+
+    <!-- ============ 案情简报 ============ -->
+    <section id="screen-brief" class="screen hidden">
+        <div class="brief-panel panel">
+            <button class="link-back" onclick="app.backHome()">← 返回档案柜</button>
+            <div class="brief-tag" id="brief-tag"></div>
+            <h1 id="brief-title"></h1>
+            <p class="brief-sub" id="brief-sub"></p>
+            <dl class="brief-meta" id="brief-meta"></dl>
+            <p class="brief-summary" id="brief-summary"></p>
+            <h3 class="section-title">涉案人员</h3>
+            <div class="roster" id="brief-roster"></div>
+            <div class="brief-actions">
+                <button class="btn-primary" onclick="app.startInvestigation()">开始调查</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============ 调查台 ============ -->
+    <section id="screen-game" class="screen hidden">
+        <div class="game-top">
+            <button class="link-back" onclick="app.confirmQuit()">← 放弃本案</button>
+            <div class="game-case" id="game-case-name"></div>
+            <div class="game-stat" id="game-stat"></div>
+        </div>
+
+        <div class="game-grid">
+            <!-- 左：现场证物 -->
+            <aside class="panel panel-evidence">
+                <div class="panel-head">
+                    <h3>现场证物</h3>
+                    <span class="panel-hint">点击查看</span>
+                </div>
+                <div id="evidence-grid" class="evidence-grid"></div>
+                <div id="evidence-detail" class="evidence-detail hidden"></div>
+            </aside>
+
+            <!-- 中：审讯 -->
+            <main class="panel panel-interview">
+                <div id="suspect-tabs" class="suspect-tabs"></div>
+                <div id="interview-body" class="interview-body"></div>
+            </main>
+
+            <!-- 右：推理笔记 -->
+            <aside class="panel panel-notes">
+                <div class="panel-head">
+                    <h3>推理笔记</h3>
+                    <span class="panel-hint" id="notes-count"></span>
+                </div>
+                <div id="notes-body" class="notes-body"></div>
+            </aside>
+        </div>
+
+        <div class="game-actions">
+            <button class="btn-ghost" onclick="app.showHint()">💡 要个方向</button>
+            <button class="btn-primary" onclick="app.openAccuse()">提交指控</button>
+        </div>
+    </section>
+
+    <!-- ============ 提交指控 ============ -->
+    <section id="screen-accuse" class="screen hidden">
+        <div class="panel accuse-panel">
+            <button class="link-back" onclick="app.backToInvestigation()">← 回到调查</button>
+            <h1>提交指控</h1>
+            <p class="accuse-sub">一旦提交，本案即告结案。想清楚再落笔。</p>
+
+            <h3 class="section-title">一 · 你指控谁</h3>
+            <div id="accuse-suspects" class="accuse-grid"></div>
+
+            <h3 class="section-title">二 · 两项关键证据<small>（决定你的指控是否站得住）</small></h3>
+            <div id="accuse-evidence" class="accuse-grid accuse-grid-sm"></div>
+
+            <h3 class="section-title">三 · 动机</h3>
+            <div id="accuse-motives" class="accuse-list"></div>
+
+            <div class="accuse-actions">
+                <button class="btn-ghost" onclick="app.backToInvestigation()">再查查</button>
+                <button class="btn-primary" onclick="app.submitAccusation()">签字结案</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============ 结案 ============ -->
+    <section id="screen-result" class="screen hidden">
+        <div class="panel result-panel">
+            <div class="verdict-row">
+                <div class="verdict-badge" id="verdict-badge">—</div>
+                <div class="verdict-text">
+                    <h1 id="verdict-title"></h1>
+                    <p id="verdict-sub"></p>
+                </div>
+            </div>
+            <div class="result-stats" id="result-stats"></div>
+            <div class="truth-block" id="truth-block"></div>
+            <div class="result-actions">
+                <button class="btn-ghost" onclick="app.backHome()">返回档案柜</button>
+                <button class="btn-primary" onclick="app.replayCase()">再查一次</button>
+            </div>
+        </div>
+    </section>
+
+    <div id="toast" class="toast hidden"></div>
+</div>
+
+<script src="cases.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
